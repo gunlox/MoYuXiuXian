@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+release/
+
+# IDE & OS
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.*
+
+# TypeScript build info
+tsconfig.tsbuildinfo
+
+# Vitest
+coverage/
+
+# Electron packaged output
+out/
+
+# Windsurf / Trae IDE
+.windsurf/
+.trae/
+
+# Misc docs (not part of source)
+CheckListDoc/
+DevelopmentDoc/
+Doc/
+other/
+数值体系审查报告.md
