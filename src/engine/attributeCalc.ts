@@ -4,10 +4,12 @@ import { getTechBonuses, getArtifactBonuses, getMasteryBonuses, getArtifactEnhan
 import { getActiveBuffEffectiveMultiplier } from '../data/alchemy';
 import { getSect } from '../data/sect';
 import { getRealmStaminaMax, getRealmStaminaRegen } from '../data/dungeon';
+import { getSectGrowthBonuses } from './sectEngine';
 
 /** 计算玩家最终基础属性 = 境界基础 * (1 + 功法倍率 + 门派倍率 + 转生加成 + 精通加成) + 装备固定值 */
 export function calcFinalAttributes(state: GameState): Attributes {
   const base = getRealm(state.realmIndex).attributes;
+  const sectGrowth = getSectGrowthBonuses(state);
 
   // 功法倍率加成
   let techAtkMul = 0, techDefMul = 0, techHpMul = 0;
@@ -72,9 +74,9 @@ export function calcFinalAttributes(state: GameState): Attributes {
   }
 
   return {
-    attack:  Math.floor((base.attack  * (1 + techAtkMul + sectAtkMul + rpAtk + mb.atkBonus) + artAtk) * (1 + buffAtkMul + buffAllMul)),
-    defense: Math.floor((base.defense * (1 + techDefMul + sectDefMul + rpDef + mb.defBonus) + artDef) * (1 + buffDefMul + buffAllMul)),
-    hp:      Math.floor((base.hp      * (1 + techHpMul  + sectHpMul  + rpHp  + mb.hpBonus)  + artHp)  * (1 + buffHpMul  + buffAllMul)),
+    attack:  Math.floor((base.attack  * (1 + techAtkMul + sectAtkMul + sectGrowth.atkBonus + rpAtk + mb.atkBonus) + artAtk) * (1 + buffAtkMul + buffAllMul)),
+    defense: Math.floor((base.defense * (1 + techDefMul + sectDefMul + sectGrowth.defBonus + rpDef + mb.defBonus) + artDef) * (1 + buffDefMul + buffAllMul)),
+    hp:      Math.floor((base.hp      * (1 + techHpMul  + sectHpMul  + sectGrowth.hpBonus  + rpHp  + mb.hpBonus)  + artHp)  * (1 + buffHpMul  + buffAllMul)),
   };
 }
 
@@ -90,6 +92,7 @@ export function calcBonusAttributes(state: GameState): BonusAttributes {
   const MAX_CRIT_RATE  = 1.0;
   const MAX_CRIT_DMG   = 50.0;
   const MAX_DODGE      = 0.75;
+  const sectGrowth = getSectGrowthBonuses(state);
 
   let critRate = BASE_CRIT_RATE;
   let critDmg  = BASE_CRIT_DMG;
@@ -127,6 +130,8 @@ export function calcBonusAttributes(state: GameState): BonusAttributes {
   critRate += mb.critRateBonus;
   critDmg  += mb.critDmgBonus;
   dodge    += mb.dodgeBonus;
+  critRate += sectGrowth.critRateBonus;
+  critDmg  += sectGrowth.critDmgBonus;
 
   // 门派暴击率加成
   if (state.sectId) {
@@ -155,6 +160,7 @@ export function calcBonusAttributes(state: GameState): BonusAttributes {
 /** 获取修炼速度倍率 (1 + 功法expBonus + 装备expRate + 丹药buff + 门派加成) */
 export function getExpMultiplier(state: GameState): number {
   let mul = 1;
+  const sectGrowth = getSectGrowthBonuses(state);
   if (state.equippedTechnique) {
     const b = getTechBonuses(state.equippedTechnique);
     mul += b.expBonus;
@@ -177,6 +183,7 @@ export function getExpMultiplier(state: GameState): number {
     const sect = getSect(state.sectId);
     if (sect) mul += sect.bonus.expBonus;
   }
+  mul += sectGrowth.expBonus;
   if (state.rebirthPerks) mul += state.rebirthPerks.expBonus;
   const mb = getMasteryBonuses(state.masteredTechniques ?? []);
   mul += mb.expBonus;
@@ -185,7 +192,7 @@ export function getExpMultiplier(state: GameState): number {
 
 /** 获取炼丹成功率加成 */
 export function getAlchemyBonus(state: GameState): number {
-  let bonus = 0;
+  let bonus = getSectGrowthBonuses(state).alchemyBonus;
   if (state.sectId) {
     const sect = getSect(state.sectId);
     if (sect) bonus += sect.bonus.alchemyBonus;
@@ -196,7 +203,7 @@ export function getAlchemyBonus(state: GameState): number {
 
 /** 获取掉落率加成 */
 export function getDropBonus(state: GameState): number {
-  let bonus = 0;
+  let bonus = getSectGrowthBonuses(state).dropBonus;
   if (state.sectId) {
     const sect = getSect(state.sectId);
     if (sect) bonus += sect.bonus.dropBonus;
@@ -222,6 +229,11 @@ export function getBreakthroughPerkBonus(state: GameState): number {
   return state.rebirthPerks ? state.rebirthPerks.breakthroughBonus : 0;
 }
 
+/** 获取门派成长突破成功率加成 */
+export function getSectGrowthBreakthroughBonus(state: GameState): number {
+  return getSectGrowthBonuses(state).breakthroughBonus;
+}
+
 /** 获取秘境奖励倍率加成 */
 export function getDungeonBonus(state: GameState): number {
   return state.rebirthPerks ? state.rebirthPerks.dungeonBonus : 0;
@@ -229,5 +241,10 @@ export function getDungeonBonus(state: GameState): number {
 
 /** 获取战斗灵石收益加成 */
 export function getBattleGoldBonus(state: GameState): number {
-  return state.rebirthPerks ? state.rebirthPerks.battleGoldBonus : 0;
+  return (state.rebirthPerks ? state.rebirthPerks.battleGoldBonus : 0) + getSectGrowthBonuses(state).battleGoldBonus;
+}
+
+/** 获取离线收益倍率加成 */
+export function getOfflineBonus(state: GameState): number {
+  return getSectGrowthBonuses(state).offlineBonus;
 }

@@ -142,7 +142,7 @@ export function calcRebirthReward(realmIndex: number, rebirthCount: number): num
   const extra = Math.max(0, realmIndex - MIN_REBIRTH_REALM);
   const base = 3 + extra;
   const bonus = 1 + rebirthCount * 0.1;
-  return Math.max(1, Math.floor(base * bonus));
+  return Math.max(1, Math.ceil(base * bonus));
 }
 
 /** 判断是否可以转生 */

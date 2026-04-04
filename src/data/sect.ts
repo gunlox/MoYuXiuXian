@@ -1,5 +1,7 @@
 /** 门派系统 */
 
+ export type SectId = 'sect_sword' | 'sect_pill' | 'sect_body' | 'sect_spirit' | 'sect_fortune';
+
 export interface SectBonus {
   /** 修炼速度加成 */
   expBonus: number;
@@ -20,7 +22,7 @@ export interface SectBonus {
 }
 
 export interface Sect {
-  id: string;
+  id: SectId;
   name: string;
   description: string;
   philosophy: string;

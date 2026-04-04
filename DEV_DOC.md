@@ -974,7 +974,61 @@ npm run build
 
 ---
 
-## 18. 开发注意事项
+## 18. 版本控制与开源
+
+### 18.1 Git 仓库
+
+- **远程仓库**：https://github.com/gunlox/MoYuXiuXian
+- **开源协议**：GPL-3.0
+- **默认分支**：`main`（稳定发版分支）
+- **初始提交**：v3.5.0（2026-04-04）
+
+### 18.2 分支规范
+
+| 类型 | 命名格式 | 示例 |
+|------|----------|------|
+| 版本开发 | `dev/v{版本号}` | `dev/v3.6.0` |
+| 新功能 | `feature/{功能名}` | `feature/gold-shop` |
+| 修 bug | `fix/{问题描述}` | `fix/pill-decay-bug` |
+
+- 小改动可直接在 `main` 上提交
+- 大功能从 `main` 迁出分支，开发完毕后合并回 `main`
+
+### 18.3 提交规范
+
+提交信息建议使用前缀：
+
+- `feat:` 新功能
+- `fix:` 修复 bug
+- `refactor:` 重构
+- `docs:` 文档更新
+- `test:` 测试相关
+- `release:` 发版
+
+### 18.4 发版与标签
+
+每次正式发版在 `main` 上打 Tag：
+
+```bash
+git tag -a v3.6.0 -m "版本说明"
+git push origin v3.6.0
+```
+
+可在 GitHub Releases 页面上传构建好的单 HTML 文件供玩家下载。
+
+### 18.5 .gitignore 排除规则
+
+当前 `.gitignore` 排除以下内容：
+
+- `node_modules/`、`dist/`、`release/`、`out/`
+- IDE 配置（`.vscode/`、`.idea/`、`.windsurf/`、`.trae/`）
+- 环境变量文件（`.env`、`.env.*`）
+- TypeScript 编译缓存（`tsconfig.tsbuildinfo`）
+- 内部开发文档（`CheckListDoc/`、`DevelopmentDoc/`、`Doc/`、`other/`、`数值体系审查报告.md`）
+
+---
+
+## 19. 开发注意事项
 
 1. **属性计算不要分散实现**
    - `attributeCalc.ts` 是唯一属性汇总入口。
@@ -1005,7 +1059,7 @@ npm run build
 
 ---
 
-## 19. 版本更新日志
+## 20. 版本更新日志
 
 ### v3.5.0（2026-04-01）
 
@@ -1143,7 +1197,7 @@ npm run build
 3. 更新 `DEV_DOC.md` 末尾的版本记录
 4. 运行测试：`npm test`（确保全部通过）
 5. 执行打包：`npm run build`
-6. 输出目录：`D:/AiWork/MoYuJJBOOM/`，产物文件名自动重命名为规范格式
+6. 输出目录：`dist/`，产物文件名自动重命名为规范格式
 
 ### 版本弹窗机制
 - 插件位置：`scripts/injectPatchNote.ts`
