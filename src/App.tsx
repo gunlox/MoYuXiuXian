@@ -12,6 +12,7 @@ import AlchemyPanel from './components/AlchemyPanel';
 import DungeonPanel from './components/DungeonPanel';
 import AchievementPanel from './components/AchievementPanel';
 import RebirthPanel from './components/RebirthPanel';
+import SectPanel from './components/SectPanel';
 import SectSelectModal from './components/SectSelectModal';
 import TutorialOverlay from './components/TutorialOverlay';
 import DisclaimerModal from './components/DisclaimerModal';
@@ -26,10 +27,11 @@ import { GameState, SlotIndex, addLog, migrateLegacySave } from './data/gameStat
 import { calcOfflineGains, applyOfflineGains } from './engine/gameEngine';
 import { getTechTemplate, TECHNIQUE_TEMPLATES } from './data/equipment';
 import { getSect } from './data/sect';
+import { ensureSectDailyTasks, refreshSectLevelAndPassives } from './engine/sectEngine';
 
 const APP_VERSION = `v${__APP_VERSION__}`;
 
-type Tab = 'cultivate' | 'battle' | 'technique' | 'equip' | 'alchemy' | 'dungeon' | 'achieve' | 'rebirth';
+type Tab = 'cultivate' | 'battle' | 'technique' | 'equip' | 'alchemy' | 'dungeon' | 'sect' | 'achieve' | 'rebirth';
 
 // ===== 游戏主体（选档后渲染）=====
 interface GameAppProps {
@@ -115,7 +117,7 @@ function GameApp({ initialState, slotIndex, isNewGame }: GameAppProps) {
   };
 
   const handleLoadSave = (state: GameState) => {
-    setGameState(state);
+    setGameState(refreshSectLevelAndPassives(ensureSectDailyTasks(state)));
   };
 
   const handleOpenTabTitleModal = () => {
@@ -213,9 +215,15 @@ function GameApp({ initialState, slotIndex, isNewGame }: GameAppProps) {
           }
         }
       }
+      s = ensureSectDailyTasks(s);
+      s = refreshSectLevelAndPassives(s);
       return s;
     });
   };
+
+  useEffect(() => {
+    setGameState(prev => refreshSectLevelAndPassives(ensureSectDailyTasks(prev)));
+  }, [setGameState]);
 
   // 动态更新浏览器标签页标题
   useEffect(() => {
@@ -277,6 +285,7 @@ function GameApp({ initialState, slotIndex, isNewGame }: GameAppProps) {
             { key: 'equip' as Tab, label: '🛡️ 装备', extra: null },
             { key: 'alchemy' as Tab, label: '🔥 炼丹', extra: null },
             { key: 'dungeon' as Tab, label: '🌀 秘境', extra: null },
+            { key: 'sect' as Tab, label: '🏯 门派', extra: null },
             { key: 'achieve' as Tab, label: '🏆 成就', extra: null },
             { key: 'rebirth' as Tab, label: '🌟 轮回', extra: null },
           ]).map(t => (
@@ -347,6 +356,12 @@ function GameApp({ initialState, slotIndex, isNewGame }: GameAppProps) {
         {activeTab === 'dungeon' && (
           <div className="mb-4 animate-tab-in">
             <DungeonPanel gameState={gameState} onStateChange={setGameState} />
+          </div>
+        )}
+
+        {activeTab === 'sect' && (
+          <div className="mb-4 animate-tab-in">
+            <SectPanel gameState={gameState} onStateChange={setGameState} />
           </div>
         )}
 

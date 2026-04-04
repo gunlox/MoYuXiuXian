@@ -14,14 +14,16 @@ import {
   randomTechniqueDrop, getMaxDropQuality, getMaxRedTier, getAvailableQualities, randomArtifactDrop, AffixType, getTechniqueDropMaxQualityIndex, getArtifactTemplate,
 } from '../data/equipment';
 import { formatDuration, ActiveBuff, getPillRecipe } from '../data/alchemy';
-import { createInitialState, GameState } from '../data/gameState';
+import { createInitialState, GameState, loadGameFromSlot } from '../data/gameState';
 import { GOLD_SHOP, getShopPrice, getShopItem } from '../data/shop';
 import { getSect } from '../data/sect';
+import { SECT_LEVEL_REQUIREMENTS } from '../data/sectPassives';
 
 // ── 引擎层 ──
 import { formatNumber, canBreakthrough, gameTick, getBreakthroughInfo, advanceGameTime, applyOfflineGains, calcOfflineGains, applyBattleRewards, purchaseShopItem, attemptBreakthrough } from '../engine/gameEngine';
 import { executeBattle } from '../engine/battleEngine';
-import { calcFinalAttributes, calcBonusAttributes, getCharacterPower, getExpMultiplier } from '../engine/attributeCalc';
+import { calcFinalAttributes, calcBonusAttributes, getBattleGoldBonus, getCharacterPower, getDropBonus, getExpMultiplier, getAlchemyBonus, getSectGrowthBreakthroughBonus } from '../engine/attributeCalc';
+import { claimSectTaskReward, ensureSectDailyTasks, getSectLevelByContribution, refreshSectLevelAndPassives, updateSectTaskProgress } from '../engine/sectEngine';
 
 // ─────────────────────────────────────────────
 // 1. 数据完整性
@@ -1081,5 +1083,138 @@ describe('装备战力与角色战力', () => {
 
   it('角色战力公式为 attack + defense + floor(hp / 10)', () => {
     expect(getCharacterPower({ attack: 1000, defense: 500, hp: 12345 })).toBe(1000 + 500 + 1234);
+  });
+});
+
+// ─────────────────────────────────────────────
+// 门派深度化 v3.6.0
+// ─────────────────────────────────────────────
+describe('门派深度化 v3.6.0', () => {
+  it('旧存档加载后自动补齐门派成长字段', () => {
+    const raw = { ...createInitialState() } as Record<string, unknown>;
+    delete raw['sectLevel'];
+    delete raw['sectContribution'];
+    delete raw['sectDailyTasks'];
+    delete raw['sectDailyTaskDate'];
+    delete raw['sectTaskProgress'];
+    delete raw['sectClaimedTasks'];
+    delete raw['sectUnlockedPassives'];
+
+    const store = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => { store.set(key, value); },
+      removeItem: (key: string) => { store.delete(key); },
+      clear: () => { store.clear(); },
+      key: (index: number) => Array.from(store.keys())[index] ?? null,
+      get length() { return store.size; },
+    });
+
+    localStorage.setItem('moyu_slot_1', JSON.stringify(raw));
+    const loaded = loadGameFromSlot(0)!;
+    expect(loaded.sectLevel).toBe(1);
+    expect(loaded.sectContribution).toBe(0);
+    expect(loaded.sectDailyTasks).toEqual([]);
+    expect(loaded.sectTaskProgress).toEqual({});
+    expect(loaded.sectClaimedTasks).toEqual([]);
+    expect(loaded.sectUnlockedPassives).toEqual([]);
+    vi.unstubAllGlobals();
+  });
+
+  it('门派等级阈值计算正确', () => {
+    expect(SECT_LEVEL_REQUIREMENTS).toEqual([0, 100, 250, 500, 900]);
+    expect(getSectLevelByContribution(0)).toBe(1);
+    expect(getSectLevelByContribution(100)).toBe(2);
+    expect(getSectLevelByContribution(250)).toBe(3);
+    expect(getSectLevelByContribution(500)).toBe(4);
+    expect(getSectLevelByContribution(900)).toBe(5);
+  });
+
+  it('门派等级提升后自动解锁里程碑被动', () => {
+    const state = refreshSectLevelAndPassives({
+      ...createInitialState(),
+      sectId: 'sect_sword',
+      sectContribution: 500,
+    });
+
+    expect(state.sectLevel).toBe(4);
+    expect(state.sectUnlockedPassives).toContain('sect_sword_lv2');
+    expect(state.sectUnlockedPassives).toContain('sect_sword_lv4');
+    expect(state.sectUnlockedPassives).not.toContain('sect_sword_lv5');
+  });
+
+  it('日常任务每日刷新且同日保持稳定', () => {
+    const base = { ...createInitialState(), sectId: 'sect_sword' as const };
+    const day1 = ensureSectDailyTasks(base, '2026-04-04');
+    const day1Again = ensureSectDailyTasks(day1, '2026-04-04');
+    const day2 = ensureSectDailyTasks({ ...day1, sectClaimedTasks: ['daily:2026-04-04:daily_kill_20'] }, '2026-04-05');
+
+    expect(day1.sectDailyTasks).toHaveLength(3);
+    expect(day1Again.sectDailyTasks).toEqual(day1.sectDailyTasks);
+    expect(day2.sectDailyTaskDate).toBe('2026-04-05');
+    expect(day2.sectClaimedTasks).toEqual([]);
+  });
+
+  it('跨天后日常任务进度不会继承前一天的累计值', () => {
+    let state: GameState = { ...createInitialState(), sectId: 'sect_sword', sectDailyTaskDate: '2026-04-04' };
+    state = updateSectTaskProgress(state, { type: 'kill', count: 25 });
+    expect(state.sectTaskProgress['daily-progress:2026-04-04:kill_count']).toBe(25);
+    expect(state.sectTaskProgress.kill_count).toBe(25);
+
+    const nextDay = ensureSectDailyTasks(state, '2026-04-05');
+    expect(nextDay.sectTaskProgress['daily-progress:2026-04-04:kill_count']).toBeUndefined();
+    expect(nextDay.sectTaskProgress.kill_count).toBe(25);
+  });
+
+  it('任务事件能正确推进多种门派任务进度', () => {
+    let state: GameState = { ...createInitialState(), sectId: 'sect_spirit' };
+    state = updateSectTaskProgress(state, { type: 'battle_win', count: 2 });
+    state = updateSectTaskProgress(state, { type: 'kill', count: 3 });
+    state = updateSectTaskProgress(state, { type: 'alchemy_success', count: 1 });
+    state = updateSectTaskProgress(state, { type: 'dungeon_enter', count: 2 });
+    state = updateSectTaskProgress(state, { type: 'play_time', seconds: 35 });
+    state = updateSectTaskProgress(state, { type: 'realm_reach', realmIndex: 9 });
+
+    expect(state.sectTaskProgress.battle_count).toBe(2);
+    expect(state.sectTaskProgress.kill_count).toBe(3);
+    expect(state.sectTaskProgress.alchemy_success).toBe(1);
+    expect(state.sectTaskProgress.dungeon_enter).toBe(2);
+    expect(state.sectTaskProgress.play_time).toBe(35);
+    expect(state.sectTaskProgress.realm_reach).toBe(9);
+  });
+
+  it('成长任务领取后增加贡献并记录已领取状态', () => {
+    let state: GameState = {
+      ...createInitialState(),
+      sectId: 'sect_sword',
+      sectTaskProgress: { kill_count: 100 },
+    };
+
+    state = claimSectTaskReward(state, 'growth_sword_kill_100');
+    expect(state.sectContribution).toBe(50);
+    expect(state.sectClaimedTasks).toContain('growth_sword_kill_100');
+
+    const afterClaimAgain = claimSectTaskReward(state, 'growth_sword_kill_100');
+    expect(afterClaimAgain.sectContribution).toBe(50);
+  });
+
+  it('门派成长被动会作用于属性、修炼、掉落、炼丹、突破与战斗收益', () => {
+    const swordBase = refreshSectLevelAndPassives({ ...createInitialState(), sectId: 'sect_sword', sectContribution: 0 });
+    const swordGrowth = refreshSectLevelAndPassives({ ...createInitialState(), sectId: 'sect_sword', sectContribution: 500 });
+    expect(calcFinalAttributes(swordGrowth).attack).toBeGreaterThan(calcFinalAttributes(swordBase).attack);
+
+    const spiritBase = refreshSectLevelAndPassives({ ...createInitialState(), sectId: 'sect_spirit', sectContribution: 0 });
+    const spiritGrowth = refreshSectLevelAndPassives({ ...createInitialState(), sectId: 'sect_spirit', sectContribution: 900 });
+    expect(getExpMultiplier(spiritGrowth)).toBeGreaterThan(getExpMultiplier(spiritBase));
+    expect(getSectGrowthBreakthroughBonus(spiritGrowth)).toBeGreaterThan(getSectGrowthBreakthroughBonus(spiritBase));
+
+    const pillBase = refreshSectLevelAndPassives({ ...createInitialState(), sectId: 'sect_pill', sectContribution: 0 });
+    const pillGrowth = refreshSectLevelAndPassives({ ...createInitialState(), sectId: 'sect_pill', sectContribution: 900 });
+    expect(getAlchemyBonus(pillGrowth)).toBeGreaterThan(getAlchemyBonus(pillBase));
+
+    const fortuneBase = refreshSectLevelAndPassives({ ...createInitialState(), sectId: 'sect_fortune', sectContribution: 0 });
+    const fortuneGrowth = refreshSectLevelAndPassives({ ...createInitialState(), sectId: 'sect_fortune', sectContribution: 900 });
+    expect(getDropBonus(fortuneGrowth)).toBeGreaterThan(getDropBonus(fortuneBase));
+    expect(getBattleGoldBonus(fortuneGrowth)).toBeGreaterThan(getBattleGoldBonus(fortuneBase));
   });
 });

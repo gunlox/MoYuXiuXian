@@ -12,8 +12,10 @@ import { getRealm, getNextRealm, isMajorBreakthrough, TOTAL_REALMS } from '../da
 import {
   calcFinalAttributes, calcBonusAttributes, getBattleGoldBonus, getDropBonus,
   getExpMultiplier, getStaminaMax, getStaminaRegen, getBreakthroughPerkBonus,
+  getOfflineBonus, getSectGrowthBreakthroughBonus,
 } from './attributeCalc';
 import { BattleLogEntry, BattleResult, executeBattle } from './battleEngine';
+import { ensureSectDailyTasks, refreshSectLevelAndPassives, updateSectTaskProgress } from './sectEngine';
 
 /** 每次tick的时间间隔(ms) */
 export const TICK_INTERVAL = 100;
@@ -21,6 +23,10 @@ export const TICK_INTERVAL = 100;
 export const BATTLE_INTERVAL = 3000;
 /** 离线收益倍率 */
 export const OFFLINE_RATE = 0.8;
+
+function getOfflineRate(state: GameState): number {
+  return OFFLINE_RATE + getOfflineBonus(state);
+}
 
 export interface BattleRewardSummary {
   exp: number;
@@ -134,6 +140,11 @@ export function applyBattleRewards(
   }
   newState.stats = stats as typeof newState.stats;
 
+  newState = updateSectTaskProgress(newState, { type: 'battle_win', count: 1 });
+  newState = updateSectTaskProgress(newState, { type: 'kill', count: 1 });
+  if (summary.gold > 0) newState = updateSectTaskProgress(newState, { type: 'gain_gold', amount: summary.gold });
+  if (summary.herbs > 0) newState = updateSectTaskProgress(newState, { type: 'gain_herb', amount: summary.herbs });
+
   const dropBonus = getDropBonus(state);
   if (Math.random() < 0.10 + dropBonus) {
     const newArt = randomArtifactDrop(
@@ -166,6 +177,7 @@ export function applyBattleRewards(
       } else {
         newState = { ...newState, artifactBag: [...newState.artifactBag, newArt] };
         summary.artifactCount += 1;
+        newState = updateSectTaskProgress(newState, { type: 'gain_artifact', count: 1 });
         if (captureLogs) {
           extraLogs.push({ text: `🎁 获得装备【${artName}】(${QUALITY_NAMES[newArt.quality]})`, type: 'drop' });
         }
@@ -185,6 +197,7 @@ export function applyBattleRewards(
       const newTech: TechniqueInstance = { templateId: techTmpl.id, level: 1 };
       newState = { ...newState, techniqueBag: [...newState.techniqueBag, newTech] };
       summary.techniqueCount += 1;
+      newState = updateSectTaskProgress(newState, { type: 'gain_technique', count: 1 });
       if (captureLogs) {
         extraLogs.push({ text: `📖 领悟功法【${techTmpl.name}】(${QUALITY_NAMES[techTmpl.quality]})`, type: 'drop' });
       }
@@ -236,7 +249,7 @@ function resolveElapsedOfflineProgress(
 
   const gains = createEmptyOfflineGains(seconds);
   const referenceState = { ...state, lastSaveTime: now - seconds * 1000 };
-  let newState = advanceGameTime(referenceState, seconds, OFFLINE_RATE);
+  let newState = advanceGameTime(referenceState, seconds, getOfflineRate(referenceState));
   gains.exp += newState.exp - state.exp;
   gains.gold += newState.gold - state.gold;
   gains.staminaRecovered += Math.max(0, newState.stamina - state.stamina);
@@ -322,7 +335,7 @@ export function advanceGameTime(state: GameState, elapsedSeconds: number, resour
     shopResetDate = targetDate;
   }
 
-  return {
+  let nextState: GameState = {
     ...state,
     exp: state.exp + expGain,
     gold: state.gold + goldGain,
@@ -335,6 +348,17 @@ export function advanceGameTime(state: GameState, elapsedSeconds: number, resour
     shopPurchases,
     shopResetDate,
   };
+
+  if (summarySafeElapsedSeconds(elapsedSeconds) > 0) {
+    nextState = updateSectTaskProgress(nextState, { type: 'play_time', seconds: elapsedSeconds });
+  }
+  nextState = ensureSectDailyTasks(nextState, targetDate);
+  nextState = refreshSectLevelAndPassives(nextState);
+  return nextState;
+}
+
+function summarySafeElapsedSeconds(elapsedSeconds: number): number {
+  return Math.max(0, Math.floor(elapsedSeconds));
 }
 
 /** 游戏tick：每100ms调用一次，更新修为和灵石 */
@@ -429,7 +453,8 @@ export function attemptBreakthrough(state: GameState): { newState: GameState; su
   }
   const perkBonus = getBreakthroughPerkBonus(newState);
   const sectBonus = newState.sectId ? (getSect(newState.sectId)?.bonus.breakthroughBonus ?? 0) : 0;
-  const bonus = pillBonus + perkBonus + sectBonus;
+  const growthBonus = getSectGrowthBreakthroughBonus(newState);
+  const bonus = pillBonus + perkBonus + sectBonus + growthBonus;
   const finalRate = Math.min(1, realm.breakthroughRate + bonus);
   const roll = Math.random();
   const success = roll <= finalRate;
@@ -446,6 +471,12 @@ export function attemptBreakthrough(state: GameState): { newState: GameState; su
     newState.realmIndex += 1;
     newState.exp = Math.max(0, newState.exp - realm.requiredExp); // 保留溢出修为
     newState.breakthroughCount += 1;
+    newState.stats = {
+      ...newState.stats,
+      maxRealmReached: Math.max(newState.stats?.maxRealmReached || 0, newState.realmIndex),
+    };
+    newState = updateSectTaskProgress(newState, { type: 'breakthrough_success', count: 1, realmIndex: newState.realmIndex });
+    newState = updateSectTaskProgress(newState, { type: 'realm_reach', realmIndex: newState.realmIndex });
     newState = addLog(newState, `✨ 突破成功！晋升为【${next.subLevelName}】`);
 
     // 大境界突破额外提示

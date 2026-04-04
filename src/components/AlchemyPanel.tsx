@@ -13,6 +13,7 @@ import {
 import { formatNumber } from '../engine/gameEngine';
 import { getAlchemyBonus, getStaminaMax } from '../engine/attributeCalc';
 import { getRealm } from '../data/realms';
+import { updateSectTaskProgress } from '../engine/sectEngine';
 
 interface Props {
   gameState: GameState;
@@ -159,6 +160,7 @@ export default function AlchemyPanel({ gameState, onStateChange }: Props) {
       if (prev.gold < recipe.goldCost) return addLog(prev, `灵石不足，需要 ${formatNumber(recipe.goldCost)} 灵石`);
 
       let s = { ...prev, herbs: prev.herbs - recipe.herbCost, gold: prev.gold - recipe.goldCost };
+      s = updateSectTaskProgress(s, { type: 'alchemy_attempt', count: 1 });
 
       const alchBonus = getAlchemyBonus(prev);
       const finalRate = Math.min(1, recipe.successRate + alchBonus);
@@ -179,6 +181,7 @@ export default function AlchemyPanel({ gameState, onStateChange }: Props) {
           pills = [...s.pills, { recipeId: recipe.id, count: actualYield }];
         }
         s = { ...s, pills, stats };
+        s = updateSectTaskProgress(s, { type: 'alchemy_success', count: 1 });
         if (isDoubleYield) {
           s = addLog(s, `🔥 炉火纯青！额外炼制了一份丹药！获得【${recipe.name}】x${actualYield}`);
         } else {

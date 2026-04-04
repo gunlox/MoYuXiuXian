@@ -73,6 +73,20 @@ export interface GameState {
   dungeonFirstClears: Record<string, boolean>;
   /** 门派ID（null表示未选择） */
   sectId: string | null;
+  /** 当前门派等级 */
+  sectLevel: number;
+  /** 当前累计门派贡献 */
+  sectContribution: number;
+  /** 当前日常门派任务ID列表 */
+  sectDailyTasks: string[];
+  /** 门派日常任务刷新日期 (YYYY-MM-DD) */
+  sectDailyTaskDate: string;
+  /** 门派任务进度缓存 */
+  sectTaskProgress: Record<string, number>;
+  /** 已领取的门派任务奖励ID */
+  sectClaimedTasks: string[];
+  /** 已解锁的门派成长被动ID */
+  sectUnlockedPassives: string[];
   /** 已解锁成就ID列表 */
   unlockedAchievements: string[];
   /** 统计数据 */
@@ -128,6 +142,13 @@ export function createInitialState(): GameState {
     dungeonResetDate: new Date().toISOString().slice(0, 10),
     dungeonFirstClears: {},
     sectId: null,
+    sectLevel: 1,
+    sectContribution: 0,
+    sectDailyTasks: [],
+    sectDailyTaskDate: new Date().toISOString().slice(0, 10),
+    sectTaskProgress: {},
+    sectClaimedTasks: [],
+    sectUnlockedPassives: [],
     unlockedAchievements: [],
     stats: createInitialStats(),
     rebirthCount: 0,
@@ -275,6 +296,14 @@ function migrateState(raw: string): GameState | null {
     if (data.dungeonFirstClears === undefined) data.dungeonFirstClears = {};
     // v0.8
     if (data.sectId === undefined) data.sectId = null;
+    // v3.6.0 门派深度化
+    if (data.sectLevel === undefined) data.sectLevel = 1;
+    if (data.sectContribution === undefined) data.sectContribution = 0;
+    if (data.sectDailyTasks === undefined) data.sectDailyTasks = [];
+    if (data.sectDailyTaskDate === undefined) data.sectDailyTaskDate = new Date().toISOString().slice(0, 10);
+    if (data.sectTaskProgress === undefined) data.sectTaskProgress = {};
+    if (data.sectClaimedTasks === undefined) data.sectClaimedTasks = [];
+    if (data.sectUnlockedPassives === undefined) data.sectUnlockedPassives = [];
     if (data.unlockedAchievements === undefined) data.unlockedAchievements = [];
     if (data.stats === undefined) data.stats = createInitialStats();
     // v0.9

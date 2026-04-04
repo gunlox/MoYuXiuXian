@@ -10,6 +10,7 @@ import { getMajorRealmTier } from '../data/alchemy';
 import { formatNumber } from '../engine/gameEngine';
 import { getRealm } from '../data/realms';
 import { calcFinalAttributes, getDungeonBonus, getStaminaMax, getStaminaRegen } from '../engine/attributeCalc';
+import { updateSectTaskProgress } from '../engine/sectEngine';
 
 /** 福地宗被动：秘境每日次数+1 */
 function getEffectiveDailyLimit(dg: DungeonTemplate, sectId: string | null): number {
@@ -123,6 +124,7 @@ export default function DungeonPanel({ gameState, onStateChange }: Props) {
       const newCounts = { ...(prev.dungeonResetDate === today ? prev.dungeonDailyCounts : {}), [dg.id]: (dailyCounts[dg.id] || 0) + 1 };
       const stats = { ...prev.stats, dungeonEnterCount: (prev.stats?.dungeonEnterCount || 0) + 1 };
       let s = { ...prev, stamina: prev.stamina - dg.staminaCost, dungeonDailyCounts: newCounts, dungeonResetDate: today, stats };
+      s = updateSectTaskProgress(s, { type: 'dungeon_enter', count: 1 });
       s = addLog(s, `🌀 进入秘境【${dg.name}】`);
       return s;
     });
@@ -173,6 +175,7 @@ export default function DungeonPanel({ gameState, onStateChange }: Props) {
           let s = applyRewards(prev, bonus);
           const stats = { ...s.stats, dungeonClearCount: (s.stats?.dungeonClearCount || 0) + 1 };
           s = { ...s, stats };
+          s = updateSectTaskProgress(s, { type: 'dungeon_clear', count: 1 });
           // 记录首通
           const fc = { ...(s.dungeonFirstClears ?? {}), [dg.id]: true };
           s = { ...s, dungeonFirstClears: fc };
@@ -211,6 +214,8 @@ export default function DungeonPanel({ gameState, onStateChange }: Props) {
       };
       let s = { ...prev, stamina: prev.stamina - sweepCost, dungeonDailyCounts: newCounts, dungeonResetDate: today, stats };
       s = applyRewards(s, rewards);
+      s = updateSectTaskProgress(s, { type: 'dungeon_enter', count: 1 });
+      s = updateSectTaskProgress(s, { type: 'dungeon_clear', count: 1 });
       const rewardText = rewards.map(r => `${r.name}+${formatNumber(r.amount)}`).join('、');
       s = addLog(s, `⚡ 扫荡秘境【${dg.name}】完成！获得：${rewardText}`);
       return s;
