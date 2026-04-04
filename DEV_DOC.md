@@ -1,6 +1,6 @@
 # 摸鱼修仙 — 开发者文档
 
-> **最新版本**：v3.5.0（2026-04-01）  
+> **最新版本**：v3.6.0（2026-04-04）  
 > **性质**：React + TypeScript + Vite 的纯前端单机放置修仙游戏。当前正式发版形态为单 HTML 文件；Electron 目录保留，但不属于当前默认发版链路。
 
 ---
@@ -27,7 +27,7 @@ MoYuXiuXian/
 │   ├── main.tsx
 │   ├── index.css
 │   ├── vite-env.d.ts
-│   ├── components/                # 19个 UI 组件
+│   ├── components/                # 20个 UI 组件
 │   │   ├── AchievementPanel.tsx
 │   │   ├── AlchemyPanel.tsx
 │   │   ├── AttributePanel.tsx
@@ -44,10 +44,11 @@ MoYuXiuXian/
 │   │   ├── ResourceBar.tsx
 │   │   ├── SaveManager.tsx
 │   │   ├── SaveSlotModal.tsx
+│   │   ├── SectPanel.tsx
 │   │   ├── SectSelectModal.tsx
 │   │   ├── TechniquePanel.tsx
 │   │   └── TutorialOverlay.tsx
-│   ├── data/                      # 9个权威数据文件
+│   ├── data/                      # 11个权威数据文件
 │   │   ├── achievements.ts
 │   │   ├── alchemy.ts
 │   │   ├── dungeon.ts
@@ -56,12 +57,15 @@ MoYuXiuXian/
 │   │   ├── monsters.ts
 │   │   ├── realms.ts
 │   │   ├── rebirth.ts
-│   │   └── sect.ts
-│   ├── engine/                    # 4个引擎文件
+│   │   ├── sect.ts
+│   │   ├── sectPassives.ts
+│   │   └── sectTasks.ts
+│   ├── engine/                    # 5个引擎文件
 │   │   ├── attributeCalc.ts
 │   │   ├── audioEngine.ts
 │   │   ├── battleEngine.ts
-│   │   └── gameEngine.ts
+│   │   ├── gameEngine.ts
+│   │   └── sectEngine.ts
 │   ├── hooks/
 │   │   ├── useGameLoop.ts
 │   │   └── useSingleInstance.ts
@@ -102,7 +106,7 @@ MoYuXiuXian/
 
 `App.tsx` 同时负责：
 
-- 8个主 Tab 的切换
+- 9个主 Tab 的切换
 - 存档管理弹窗
 - 离线收益弹窗
 - 标签页标题设置
@@ -157,6 +161,12 @@ MoYuXiuXian/
 **长期成长**
 
 - `sectId`
+- `sectContribution`
+- `sectLevel`
+- `sectActivePassives`
+- `sectDailyTasks`
+- `sectDailyTaskDate`
+- `sectGrowthTasksClaimed`
 - `unlockedAchievements`
 - `stats`
 - `rebirthCount`
@@ -265,7 +275,8 @@ MoYuXiuXian/
 
 - 境界基础：`getRealm(state.realmIndex).attributes`
 - 功法倍率：`getTechBonuses(state.equippedTechnique)`
-- 门派倍率：`getSect(state.sectId)?.bonus`
+- 门派初始倍率：`getSect(state.sectId)?.bonus`
+- 门派成长被动：`getSectGrowthBonuses(state)`
 - 轮回倍率：`rebirthPerks.atkBonus / defBonus / hpBonus`
 - 精通倍率：`getMasteryBonuses(masteredTechniques)`
 - 装备基础：`getArtifactEnhancedBaseStats(...)`
@@ -301,7 +312,8 @@ expMul = 1
        + 当前功法 expBonus
        + 五件装备 expRate 词条
        + 丹药 exp_boost
-       + 门派 expBonus
+       + 门派初始 expBonus
+       + 门派成长被动 expBonus
        + 轮回 expBonus
        + 功法精通 expBonus
 ```
@@ -835,11 +847,13 @@ max(monster.attack - player.defense × 0.5, monster.attack × 0.1)
 
 ## 14. 门派系统
 
-定义位置：`src/data/sect.ts`
+定义位置：`src/data/sect.ts`、`src/data/sectPassives.ts`、`src/data/sectTasks.ts`、`src/engine/sectEngine.ts`、`src/components/SectPanel.tsx`
+
+### 14.1 门派选择
 
 门派在开局通过 `SectSelectModal` 选择，之后写入 `sectId`，当前实现**不可更改**。
 
-| 门派 | 实际加成 |
+| 门派 | 初始加成 |
 |------|----------|
 | 剑宗 | 攻击+15%，暴击率+5% |
 | 丹宗 | 修炼+5%，生命+5%，炼丹成功率+15% |
@@ -847,7 +861,70 @@ max(monster.attack - player.defense × 0.5, monster.attack × 0.1)
 | 灵宗 | 修炼+15%，暴击率+3% |
 | 福地宗 | 修炼+5%，炼丹成功率+5%，掉落率+15% |
 
-当前代码中 `initialTechniqueId` 字段均为 `null`，门派不会直接赠送功法。
+每个门派都有 `initialTechniqueId` 字段，拜入时赠送对应白色功法。
+
+### 14.2 门派成长系统（v3.6.0）
+
+门派深度化后，门派不再只是初始加成，而是一个可持续成长的系统。
+
+**核心循环**：完成任务 → 获得贡献 → 累积升级 → 解锁被动
+
+**门派等级**：最高5级，等级阈值定义在 `SECT_LEVEL_REQUIREMENTS`（`sectPassives.ts`）。
+
+**门派被动**（`SECT_PASSIVES`）：每个门派定义多个里程碑被动，门派等级达标后自动解锁。被动效果类型包括：
+- `expBonus` — 修炼速度
+- `atkBonus` / `defBonus` / `hpBonus` — 主属性
+- `critRateBonus` — 暴击率
+- `alchemyBonus` — 炼丹成功率
+- `dropBonus` — 掉落率
+- `breakthroughBonus` — 突破成功率
+- `dungeonBonus` — 秘境奖励
+- `battleGoldBonus` — 战斗灵石
+
+被动加成通过 `getSectGrowthBonuses(state)` 汇总，接入 `attributeCalc.ts` 中所有属性计算函数。
+
+### 14.3 门派任务
+
+**日常任务**（每日刷新2个）：
+- 任务池定义在 `SECT_TASKS`（`sectTasks.ts`），按 `category: 'daily'` 筛选
+- 每日凌晨自动刷新，由 `ensureSectDailyTasks()` 在游戏加载和 tick 时调用
+- 进度通过 `updateSectTaskProgress(state, event)` 推进，支持的事件类型包括：
+  `battle_win`、`breakthrough_success`、`alchemy_attempt`、`alchemy_success`、`dungeon_enter`、`dungeon_clear`
+- 完成后自动发放贡献奖励
+
+**成长任务**（一次性里程碑）：
+- 按 `category: 'growth'` 筛选
+- 达标后手动领取，领取记录存于 `sectGrowthTasksClaimed`
+- 提供大量贡献奖励
+
+### 14.4 门派引擎
+
+`sectEngine.ts` 提供以下核心函数：
+
+- `ensureSectDailyTasks(state)` — 检查并刷新日常任务
+- `updateSectTaskProgress(state, event)` — 推进任务进度
+- `claimGrowthTask(state, taskId)` — 领取成长任务奖励
+- `refreshSectLevelAndPassives(state)` — 刷新等级与被动
+- `getSectGrowthBonuses(state)` — 汇总已激活被动加成
+
+### 14.5 任务接入点
+
+门派任务进度在以下位置被推进：
+
+- `gameEngine.ts`：战斗胜利（`battle_win`）、突破成功（`breakthrough_success`）
+- `AlchemyPanel.tsx`：炼丹尝试（`alchemy_attempt`）、炼丹成功（`alchemy_success`）
+- `DungeonPanel.tsx`：进入秘境（`dungeon_enter`）、通关秘境（`dungeon_clear`）
+
+### 14.6 门派存档字段
+
+| 字段 | 说明 |
+|------|------|
+| `sectContribution` | 当前累计贡献 |
+| `sectLevel` | 当前门派等级（0~5）|
+| `sectActivePassives` | 已激活的被动 ID 列表 |
+| `sectDailyTasks` | 当日日常任务（含进度）|
+| `sectDailyTaskDate` | 日常任务日期标记 |
+| `sectGrowthTasksClaimed` | 已领取的成长任务 ID 列表 |
 
 ---
 
@@ -862,8 +939,10 @@ max(monster.attack - player.defense × 0.5, monster.attack × 0.1)
 
 ```text
 base = 3 + max(0, realmIndex - 23)
-reward = floor(base × (1 + rebirthCount × 0.1))
+reward = ceil(base × (1 + rebirthCount × 0.1))
 ```
+
+> v3.6.0 修复：原公式使用 `floor` 向下取整，导致部分转生次数加成被吞（如九重第2次转生 `floor(9×1.1)=9` 与第1次相同）。改为 `ceil` 向上取整后每次转生保证仙缘增长。
 
 ### 15.2 轮回后保留内容
 
@@ -970,7 +1049,7 @@ npm run build
 ### 17.4 当前测试状态
 
 - 核心测试文件：`src/__tests__/core.test.ts`
-- 当前已通过：`80 / 80`
+- 当前已通过：`116 / 116`
 
 ---
 
@@ -1060,6 +1139,42 @@ git push origin v3.6.0
 ---
 
 ## 20. 版本更新日志
+
+### v3.6.0（2026-04-04）
+
+**门派深度化系统上线**
+- 门派不再只是初始加成，拜入后可在"门派"页签接取日常任务和成长任务
+- 完成任务获得门派贡献，贡献累积提升门派等级（最高5级），解锁里程碑被动加成
+- 五大门派各有独特被动方向：剑宗（攻暴）、丹宗（炼丹/修炼）、体修宗（防御/生命）、灵宗（修炼/突破）、福地宗（掉落/秘境）
+- 每日刷新2个日常任务，支持战斗、突破、炼丹、秘境等事件自动推进进度
+- 成长任务为一次性里程碑目标，达标后可领取大量贡献奖励
+
+**新增文件**
+- `src/components/SectPanel.tsx` — 门派页签 UI
+- `src/data/sectPassives.ts` — 门派等级阈值与被动定义
+- `src/data/sectTasks.ts` — 门派任务配置
+- `src/engine/sectEngine.ts` — 门派成长核心逻辑
+
+**属性计算接入**
+- `attributeCalc.ts` 中所有属性计算函数（主属性、修炼速度、炼丹、掉落、突破、秘境、战斗灵石）均已接入门派成长被动
+
+**仙缘公式修复**
+- 修复转生仙缘计算因 `Math.floor` 向下取整导致转生次数加成被吞的问题（如九重第2次转生 `floor(9×1.1)=9` 与第1次相同）
+- 改用 `Math.ceil` 向上取整，确保每次转生都能获得更多仙缘
+
+**新手引导更新**
+- "选择门派"步骤新增门派成长系统说明（任务→贡献→等级→被动）
+- 结尾步骤新增提醒：别忘了每天去门派页签完成日常任务
+
+**数据结构变更**
+- `GameState` 新增字段：`sectContribution`、`sectLevel`、`sectActivePassives`、`sectDailyTasks`、`sectDailyTaskDate`、`sectGrowthTasksClaimed`
+- 旧存档通过 `migrateState()` 自动补齐
+
+**测试与构建**
+- 核心测试已扩展并通过：`npm test`（116/116）
+- 本次按既有单 HTML 发版规范输出构建产物
+
+---
 
 ### v3.5.0（2026-04-01）
 
