@@ -2,6 +2,7 @@ import { GameState } from '../data/gameState';
 import { getSect, SectId } from '../data/sect';
 import { getSectTaskById, getSectGrowthTasks, SectTaskDefinition } from '../data/sectTasks';
 import { SECT_LEVEL_REQUIREMENTS } from '../data/sectPassives';
+import { getSectUltimate } from '../data/sectUltimates';
 import {
   claimSectTaskReward,
   getActiveSectPassives,
@@ -59,7 +60,7 @@ export default function SectPanel({ gameState, onStateChange }: Props) {
       <div className="bg-gradient-to-br from-[#1a1a2e] to-[#16213e] rounded-xl p-4 border border-xian-gold/30">
         <div className="flex items-center justify-between mb-2">
           <div className="text-base text-xian-gold/80 font-kai">🏯 门派进度</div>
-          <div className="text-sm text-xian-gold/70">等级 {gameState.sectLevel}/5</div>
+          <div className="text-sm text-xian-gold/70">等级 {gameState.sectLevel}/{SECT_LEVEL_REQUIREMENTS.length}</div>
         </div>
         <div className="flex items-center justify-between text-sm mb-2">
           <span className="text-xian-gold/70">当前贡献</span>
@@ -94,6 +95,57 @@ export default function SectPanel({ gameState, onStateChange }: Props) {
           )}
         </div>
       </div>
+
+      {gameState.sectLevel >= 5 && (() => {
+        const ultimate = getSectUltimate(sectId);
+        if (!ultimate) return null;
+        const now = Date.now() / 1000;
+        const cooldownRemaining = Math.max(0, (gameState.sectUltimateUsedAt / 1000) + ultimate.cooldownSeconds - now);
+        const handleActivate = () => {
+          onStateChange(prev => {
+            const next: GameState = {
+              ...prev,
+              sectUltimateUsedAt: Date.now(),
+            };
+            if (ultimate.durationSeconds > 0) {
+              next.sectUltimateActiveUntil = Date.now() + ultimate.durationSeconds * 1000;
+            }
+            if (ultimate.id === 'ult_sword') {
+              next.sectUltimateFlags = { ...(next.sectUltimateFlags || {}), crit_guaranteed: 1 };
+            } else if (ultimate.id === 'ult_pill') {
+              next.sectUltimateFlags = { ...(next.sectUltimateFlags || {}), alchemy_guaranteed: 1 };
+            } else if (ultimate.id === 'ult_fortune') {
+              next.sectUltimateFlags = { ...(next.sectUltimateFlags || {}), drop_boost_remaining: 3 };
+            }
+            return next;
+          });
+        };
+        return (
+          <div className="bg-gradient-to-br from-[#1a1a2e] to-[#16213e] rounded-xl p-4 border border-xian-gold/30">
+            <div className="text-base text-xian-gold/80 font-kai mb-3">⚡ 门派绝学</div>
+            <div className="rounded-lg p-3 border border-purple-500/20 bg-purple-500/5">
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <div className="text-purple-300 font-bold">{ultimate.name}</div>
+                <span className="text-xs text-purple-400/80">CD: {Math.max(0, Math.floor(ultimate.cooldownSeconds / 60))}分钟</span>
+              </div>
+              <div className="text-sm text-xian-gold/70 mb-3">{ultimate.description}</div>
+              <button
+                onClick={handleActivate}
+                disabled={cooldownRemaining > 0}
+                className={`w-full py-2 rounded text-sm font-bold transition-all ${
+                  cooldownRemaining > 0
+                    ? 'bg-gray-600/40 border border-gray-500/30 text-gray-400 cursor-not-allowed'
+                    : 'bg-purple-600/40 border border-purple-500/40 text-purple-300 hover:bg-purple-600/60'
+                }`}
+              >
+                {cooldownRemaining > 0
+                  ? `冷却中 ${Math.floor(cooldownRemaining / 60)}:${Math.floor(cooldownRemaining % 60).toString().padStart(2, '0')}`
+                  : '激活绝学'}
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       <TaskSection
         title="📜 今日门派任务"

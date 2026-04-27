@@ -10,6 +10,9 @@ export interface HerbType {
   description: string;
 }
 
+/** 基础 Buff 持续时长上限（秒），门派被动可在此基础上扩展 */
+export const BASE_BUFF_DURATION = 12 * 3600;
+
 export const HERB_TYPES: HerbType[] = [
   { id: 'herb_w1', name: '小还丹草', quality: 'white', description: '最常见的灵草' },
   { id: 'herb_w2', name: '蛇胆草', quality: 'white', description: '蕴含微量蛇毒精华' },

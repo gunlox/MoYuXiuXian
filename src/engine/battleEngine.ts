@@ -25,11 +25,17 @@ export function executeBattle(
   playerAttrs: Attributes,
   bonusAttrs: BonusAttributes,
   monster: Monster,
-  options?: { captureLogs?: boolean; dropBonus?: number },
+  options?: { captureLogs?: boolean; dropBonus?: number; lowHpAtkBonus?: number; antiDodge?: number; maxRounds?: number; ultimateDmgReduction?: number },
 ): BattleResult {
   const captureLogs = options?.captureLogs ?? true;
   const logs: BattleLogEntry[] = [];
   const drops: { name: string; type: Drop['type']; amount: number }[] = [];
+  const antiDodgeRate = options?.antiDodge ?? 0;
+  const battleMaxRounds = options?.maxRounds ?? 50;
+
+  // 体修宗浴血奋战：战斗开始前判定
+  const lowHpBonus = options?.lowHpAtkBonus ?? 0;
+  let effectiveAttack = playerAttrs.attack;
 
   // 随机实例化怪物属性（攻击与血量独立随机）
   const instAtk = Math.floor(monster.attackMin + Math.random() * (monster.attackMax - monster.attackMin + 1));
@@ -40,7 +46,14 @@ export function executeBattle(
   const playerMaxHp = playerAttrs.hp;
   let monsterHp = instHp;
   let round = 0;
-  const maxRounds = 50;
+  let deathSaveTriggered = false;
+
+  if (lowHpBonus > 0 && playerHp < playerMaxHp * 0.5) {
+    effectiveAttack = Math.floor(playerAttrs.attack * (1 + lowHpBonus));
+    if (captureLogs) {
+      logs.push({ text: `🔥 浴血奋战！攻击提升至 ${formatNumber(effectiveAttack)}`, type: 'info' });
+    }
+  }
 
   if (captureLogs) {
     logs.push({
@@ -50,15 +63,13 @@ export function executeBattle(
     });
   }
 
-  while (playerHp > 0 && monsterHp > 0 && round < maxRounds) {
+  while (playerHp > 0 && monsterHp > 0 && round < battleMaxRounds) {
     round++;
 
-    // 玩家攻击：基础伤害
     const baseDmg = Math.max(
-      Math.floor(playerAttrs.attack - monster.defense * 0.5),
-      Math.floor(playerAttrs.attack * 0.1)
+      Math.floor(effectiveAttack - monster.defense * 0.5),
+      Math.floor(effectiveAttack * 0.1)
     );
-    // 暴击判断
     const isCrit = Math.random() < bonusAttrs.critRate;
     const totalPlayerDmg = isCrit
       ? Math.floor(baseDmg * (1 + bonusAttrs.critDmg))
@@ -77,8 +88,9 @@ export function executeBattle(
 
     if (monsterHp <= 0) break;
 
-    // 怪物攻击（先判断闪避）
-    const dodged = Math.random() < bonusAttrs.dodge;
+    // 怪物攻击（先判断闪避，试炼塔Boss有最低命中率）
+    const effectiveDodge = Math.max(0, bonusAttrs.dodge - antiDodgeRate);
+    const dodged = Math.random() < effectiveDodge;
     if (dodged) {
       if (captureLogs) {
         logs.push({
@@ -88,10 +100,14 @@ export function executeBattle(
         });
       }
     } else {
-      const monsterDmg = Math.max(
+      let monsterDmg = Math.max(
         Math.floor(instAtk - playerAttrs.defense * 0.5),
         Math.floor(instAtk * 0.1)
       );
+      const dmgReduction = options?.ultimateDmgReduction ?? 0;
+      if (dmgReduction > 0) {
+        monsterDmg = Math.floor(monsterDmg * (1 - dmgReduction));
+      }
       playerHp -= monsterDmg;
       if (captureLogs) {
         logs.push({
@@ -99,6 +115,21 @@ export function executeBattle(
           type: 'monster_attack',
           playerHpBar: { current: Math.max(0, playerHp), max: playerMaxHp },
         });
+      }
+    }
+
+    // 体修宗免死判定
+    if (playerHp <= 0 && !deathSaveTriggered && bonusAttrs.deathSaveChance > 0) {
+      if (Math.random() < bonusAttrs.deathSaveChance) {
+        playerHp = 1;
+        deathSaveTriggered = true;
+        if (captureLogs) {
+          logs.push({
+            text: '🛡️ 不灭金身触发！你免于死亡，保留1点气血',
+            type: 'info',
+            playerHpBar: { current: 1, max: playerMaxHp },
+          });
+        }
       }
     }
 
@@ -116,7 +147,6 @@ export function executeBattle(
       });
     }
 
-    // 计算掉落
     const dropBonusVal = options?.dropBonus ?? 0;
     for (const drop of monster.drops) {
       const effectiveChance = Math.min(drop.chance * (1 + dropBonusVal), 1.0);

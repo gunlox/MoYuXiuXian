@@ -15,6 +15,14 @@ export interface SectGrowthBonuses {
   breakthroughBonus: number;
   battleGoldBonus: number;
   offlineBonus: number;
+  dungeonBonus: number;
+  extraDropChance: number;
+  doubleAlchemyChance: number;
+  lowHpAtkBonus: number;
+  deathSaveChance: number;
+  breakthroughFailProtect: number;
+  doubleTechChance: number;
+  buffDurationBonus: number;
 }
 
 export type SectProgressEvent =
@@ -27,6 +35,7 @@ export type SectProgressEvent =
   | { type: 'dungeon_clear'; count?: number }
   | { type: 'gain_gold'; amount: number }
   | { type: 'gain_herb'; amount: number }
+  | { type: 'gain_fragment'; amount: number }
   | { type: 'gain_artifact'; count?: number }
   | { type: 'gain_technique'; count?: number }
   | { type: 'play_time'; seconds: number }
@@ -172,6 +181,9 @@ export function updateSectTaskProgress(state: GameState, event: SectProgressEven
     case 'gain_herb':
       addTrackedProgress('herb_total', event.amount);
       break;
+    case 'gain_fragment':
+      addTrackedProgress('fragment_total', event.amount);
+      break;
     case 'gain_artifact':
       addTrackedProgress('artifact_gain', event.count ?? 1);
       break;
@@ -215,7 +227,7 @@ export function isSectTaskClaimed(state: GameState, task: SectTaskDefinition): b
 export function refreshSectLevelAndPassives(state: GameState): GameState {
   if (!state.sectId) return state;
 
-  const nextLevel = getSectLevelByContribution(state.sectContribution || 0);
+  const nextLevel = getSectLevelByContribution(state.sectTotalContributionEarned || state.sectContribution || 0);
   const passives = getSectPassives(state.sectId as SectId).filter(passive => passive.unlockLevel <= nextLevel);
   const nextPassiveIds = passives.map(passive => passive.id);
   const currentPassiveIds = state.sectUnlockedPassives || [];
@@ -261,6 +273,7 @@ export function claimSectTaskReward(state: GameState, taskId: string): GameState
   let nextState: GameState = {
     ...state,
     sectContribution: state.sectContribution + task.rewardContribution,
+    sectTotalContributionEarned: state.sectTotalContributionEarned + task.rewardContribution,
     sectClaimedTasks: [...state.sectClaimedTasks, claimedKey],
   };
 
@@ -271,7 +284,7 @@ export function claimSectTaskReward(state: GameState, taskId: string): GameState
 export function getActiveSectPassives(state: GameState): SectPassiveDefinition[] {
   if (!state.sectId) return [];
   const activeIds = new Set(state.sectUnlockedPassives || []);
-  return getSectPassives(state.sectId as SectId).filter(passive => activeIds.has(passive.id) || passive.unlockLevel <= state.sectLevel);
+  return getSectPassives(state.sectId as SectId).filter(passive => activeIds.has(passive.id));
 }
 
 export function getSectGrowthBonuses(state: GameState): SectGrowthBonuses {
@@ -287,6 +300,14 @@ export function getSectGrowthBonuses(state: GameState): SectGrowthBonuses {
     breakthroughBonus: 0,
     battleGoldBonus: 0,
     offlineBonus: 0,
+    dungeonBonus: 0,
+    extraDropChance: 0,
+    doubleAlchemyChance: 0,
+    lowHpAtkBonus: 0,
+    deathSaveChance: 0,
+    breakthroughFailProtect: 0,
+    doubleTechChance: 0,
+    buffDurationBonus: 0,
   };
 
   const activePassives = getActiveSectPassives(state);
@@ -302,11 +323,19 @@ export function getSectGrowthBonuses(state: GameState): SectGrowthBonuses {
     breakthrough_bonus: 'breakthroughBonus',
     battle_gold_bonus: 'battleGoldBonus',
     offline_bonus: 'offlineBonus',
+    dungeon_bonus: 'dungeonBonus',
+    extra_drop_chance: 'extraDropChance',
+    double_alchemy_chance: 'doubleAlchemyChance',
+    low_hp_atk_bonus: 'lowHpAtkBonus',
+    death_save_chance: 'deathSaveChance',
+    breakthrough_fail_protect: 'breakthroughFailProtect',
+    double_tech_chance: 'doubleTechChance',
+    buff_duration_bonus: 'buffDurationBonus',
   };
 
   for (const passive of activePassives) {
     const key = effectMap[passive.effect.type];
-    result[key] += passive.effect.value;
+    if (key) result[key] += passive.effect.value;
   }
 
   return result;

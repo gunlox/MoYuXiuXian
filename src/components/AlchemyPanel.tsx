@@ -5,13 +5,13 @@ import {
   describePillEffect, formatDuration,
   getPillDecayFactor, getMajorRealmTier,
   getActiveBuffEffectiveMultiplier,
-  PillRecipe,
+  PillRecipe, BASE_BUFF_DURATION,
 } from '../data/alchemy';
 import {
   QUALITY_COLORS, QUALITY_BORDER, QUALITY_BG, QUALITY_NAMES,
 } from '../data/equipment';
 import { formatNumber } from '../engine/gameEngine';
-import { getAlchemyBonus, getStaminaMax } from '../engine/attributeCalc';
+import { getAlchemyBonus, getStaminaMax, getSectGrowthDoubleAlchemyChance, getSectGrowthBuffDurationBonus } from '../engine/attributeCalc';
 import { getRealm } from '../data/realms';
 import { updateSectTaskProgress } from '../engine/sectEngine';
 
@@ -26,7 +26,8 @@ export default function AlchemyPanel({ gameState, onStateChange }: Props) {
   const [showBuffFullAlert, setShowBuffFullAlert] = useState(false);
   const [showDecayZeroAlert, setShowDecayZeroAlert] = useState(false);
   const unlockedRecipes = getUnlockedRecipes(gameState.realmIndex);
-  const MAX_BUFF_DURATION = 12 * 3600;
+  const buffDurationBonus = getSectGrowthBuffDurationBonus(gameState);
+  const MAX_BUFF_DURATION = BASE_BUFF_DURATION * (1 + buffDurationBonus);
   const BUFF_FULL_THRESHOLD = MAX_BUFF_DURATION - 100;
 
   const getPillUseBlockReason = (state: GameState, recipe: PillRecipe) => {
@@ -163,15 +164,28 @@ export default function AlchemyPanel({ gameState, onStateChange }: Props) {
       s = updateSectTaskProgress(s, { type: 'alchemy_attempt', count: 1 });
 
       const alchBonus = getAlchemyBonus(prev);
-      const finalRate = Math.min(1, recipe.successRate + alchBonus);
-      const success = Math.random() <= finalRate;
-      // 更新统计
+
+      // 丹宗绝学：必定成功
+      const alchemyGuaranteed = (prev.sectUltimateFlags?.alchemy_guaranteed ?? 0) > 0;
+      const finalRate = alchemyGuaranteed ? 1 : Math.min(1, recipe.successRate + alchBonus);
+      const success = alchemyGuaranteed || Math.random() <= finalRate;
       const stats = { ...s.stats };
       if (success) {
         stats.alchemySuccessCount = (stats.alchemySuccessCount || 0) + 1;
-        // 丹宗被动：30%概率双倍产出
-        const isDoubleYield = prev.sectId === 'sect_pill' && Math.random() < 0.30;
-        const actualYield = isDoubleYield ? recipe.yield * 2 : recipe.yield;
+
+        // 丹宗绝学：额外产出 +2
+        let extraYield = 0;
+        if (alchemyGuaranteed) {
+          extraYield += 2;
+          const newFlags = { ...(s.sectUltimateFlags || {}) };
+          newFlags.alchemy_guaranteed = Math.max(0, (newFlags.alchemy_guaranteed || 1) - 1);
+          s = { ...s, sectUltimateFlags: newFlags };
+        }
+
+        // 丹宗 Lv.10 被动：双倍炼丹概率
+        const doubleAlchChance = getSectGrowthDoubleAlchemyChance(prev);
+        const isDoubleYield = doubleAlchChance > 0 && Math.random() < doubleAlchChance;
+        const actualYield = isDoubleYield ? (recipe.yield + extraYield) * 2 : recipe.yield + extraYield;
         // 添加到丹药背包
         const existIdx = s.pills.findIndex(p => p.recipeId === recipe.id);
         let pills;

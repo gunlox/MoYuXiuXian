@@ -5,6 +5,7 @@ import {
   createInitialPerks,
 } from '../data/rebirth';
 import { getRealm } from '../data/realms';
+import { getSectLevelByContribution } from '../engine/sectEngine';
 
 interface Props {
   gameState: GameState;
@@ -34,13 +35,22 @@ export default function RebirthPanel({ gameState, onStateChange }: Props) {
       const s: GameState = {
         ...fresh,
         sectId: prev.sectId,
+        sectLevel: getSectLevelByContribution(prev.sectTotalContributionEarned ?? prev.sectContribution ?? 0),
+        sectContribution: Math.floor((prev.sectContribution || 0) * Math.min(1.0, 0.3 * newCount)),
+        sectTotalContributionEarned: prev.sectTotalContributionEarned ?? prev.sectContribution ?? 0,
+        sectUnlockedPassives: prev.sectUnlockedPassives,
+        sectTrialMaxFloor: prev.sectTrialMaxFloor ?? 0,
+        sectPastLifePassiveId: prev.sectPastLifePassiveId,
+        sectDailyTasks: [],
+        sectDailyTaskDate: new Date().toISOString().slice(0, 10),
+        sectTaskProgress: {},
+        sectClaimedTasks: prev.sectClaimedTasks.filter(id => !id!.startsWith('daily:')),
         unlockedAchievements: prev.unlockedAchievements,
         stats: {
           ...prev.stats,
-          // 记录最高境界
           maxRealmReached: Math.max(prev.stats?.maxRealmReached || 0, prev.realmIndex),
         },
-        totalPlayTime: prev.totalPlayTime, // 保留累计修炼时间
+        totalPlayTime: prev.totalPlayTime,
         rebirthCount: newCount,
         xianyuan: newXianyuan,
         rebirthPerks: prev.rebirthPerks ?? createInitialPerks(),

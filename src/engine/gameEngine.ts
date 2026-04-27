@@ -12,10 +12,11 @@ import { getRealm, getNextRealm, isMajorBreakthrough, TOTAL_REALMS } from '../da
 import {
   calcFinalAttributes, calcBonusAttributes, getBattleGoldBonus, getDropBonus,
   getExpMultiplier, getStaminaMax, getStaminaRegen, getBreakthroughPerkBonus,
-  getOfflineBonus, getSectGrowthBreakthroughBonus,
+  getOfflineBonus, getSectGrowthBreakthroughBonus, getBreakthroughFailProtect,
+  getSectGrowthExtraDropChance, getSectGrowthDoubleTechChance,
 } from './attributeCalc';
 import { BattleLogEntry, BattleResult, executeBattle } from './battleEngine';
-import { ensureSectDailyTasks, refreshSectLevelAndPassives, updateSectTaskProgress } from './sectEngine';
+import { ensureSectDailyTasks, refreshSectLevelAndPassives, updateSectTaskProgress, getSectGrowthBonuses } from './sectEngine';
 
 /** 每次tick的时间间隔(ms) */
 export const TICK_INTERVAL = 100;
@@ -136,6 +137,7 @@ export function applyBattleRewards(
     } else if (drop.type === 'fragment') {
       newState.fragments += drop.amount;
       summary.fragments += drop.amount;
+      newState = updateSectTaskProgress(newState, { type: 'gain_fragment', amount: drop.amount });
     }
   }
   newState.stats = stats as typeof newState.stats;
@@ -185,6 +187,32 @@ export function applyBattleRewards(
     }
   }
 
+  const extraDropChance = getSectGrowthExtraDropChance(newState);
+  if (extraDropChance > 0 && Math.random() < extraDropChance) {
+    const extraArt = randomArtifactDrop(
+      state.realmIndex,
+      state.rebirthCount ?? 0,
+      undefined,
+      getArtifactDropTargetTier(state),
+    );
+    if (extraArt) {
+      const artName = getArtifactTemplate(extraArt.templateId)?.name ?? '未知装备';
+      if (state.autoSalvageQualities?.[extraArt.quality]) {
+        const rewards = getArtifactSalvageRewards(extraArt.quality);
+        newState = { ...newState, gold: newState.gold + rewards.gold, fragments: newState.fragments + rewards.fragments };
+        summary.gold += rewards.gold;
+        summary.fragments += rewards.fragments;
+        summary.autoSalvageFragments += rewards.fragments;
+        summary.autoSalvageCount += 1;
+      } else {
+        newState = { ...newState, artifactBag: [...newState.artifactBag, extraArt] };
+        summary.artifactCount += 1;
+        newState = updateSectTaskProgress(newState, { type: 'gain_artifact', count: 1 });
+        if (captureLogs) extraLogs.push({ text: `🎁 剑开天门！获得额外装备【${artName}】(${QUALITY_NAMES[extraArt.quality]})`, type: 'drop' });
+      }
+    }
+  }
+
   if (Math.random() < 0.05 + dropBonus) {
     const maxQ = getTechniqueDropMaxQualityIndex(state.realmIndex, state.rebirthCount ?? 0);
     const ownedTechniqueIds = new Set([
@@ -201,6 +229,24 @@ export function applyBattleRewards(
       if (captureLogs) {
         extraLogs.push({ text: `📖 领悟功法【${techTmpl.name}】(${QUALITY_NAMES[techTmpl.quality]})`, type: 'drop' });
       }
+    }
+  }
+
+  const doubleTechChance = getSectGrowthDoubleTechChance(newState);
+  if (doubleTechChance > 0 && Math.random() < doubleTechChance) {
+    const maxQ2 = getTechniqueDropMaxQualityIndex(state.realmIndex, state.rebirthCount ?? 0);
+    const ownedTechIds = new Set([
+      ...newState.techniqueBag.map(t => t.templateId),
+      ...(newState.masteredTechniques ?? []),
+      ...(newState.equippedTechnique ? [newState.equippedTechnique.templateId] : []),
+    ]);
+    const extraTechTmpl = randomTechniqueDrop(maxQ2, Array.from(ownedTechIds));
+    if (extraTechTmpl) {
+      const extraTech: TechniqueInstance = { templateId: extraTechTmpl.id, level: 1 };
+      newState = { ...newState, techniqueBag: [...newState.techniqueBag, extraTech] };
+      summary.techniqueCount += 1;
+      newState = updateSectTaskProgress(newState, { type: 'gain_technique', count: 1 });
+      if (captureLogs) extraLogs.push({ text: `📖 鸿蒙初开！额外领悟功法【${extraTechTmpl.name}】(${QUALITY_NAMES[extraTechTmpl.quality]})`, type: 'drop' });
     }
   }
 
@@ -222,15 +268,48 @@ export function runOneAutoBattle(
   }
 
   const monster = area.monsters[Math.floor(Math.random() * area.monsters.length)];
+  const sectGrowth = getSectGrowthBonuses(state);
+
+  // 绝学：剑宗必定暴击 + 暴击伤害 ×1.5
+  let bonusAttrs = calcBonusAttributes(state);
+  const critGuaranteed = (state.sectUltimateFlags?.crit_guaranteed ?? 0) > 0;
+  if (critGuaranteed) {
+    bonusAttrs = { ...bonusAttrs, critRate: 1.0, critDmg: bonusAttrs.critDmg * 1.5 };
+  }
+
+  // 绝学：福地宗掉落加成
+  let effectiveDropBonus = getDropBonus(state);
+  if ((state.sectUltimateFlags?.drop_boost_remaining ?? 0) > 0) {
+    effectiveDropBonus += 0.50;
+  }
+
+  // 绝学：体修宗金刚不坏 — 伤害 -50%
+  const ultimateDmgReduction = (state.sectUltimateActiveUntil > 0 && Date.now() < state.sectUltimateActiveUntil) ? 0.5 : 0;
+
   const result = executeBattle(
     calcFinalAttributes(state),
-    calcBonusAttributes(state),
+    bonusAttrs,
     monster,
-    { captureLogs: options?.captureLogs ?? true, dropBonus: getDropBonus(state) },
+    { captureLogs: options?.captureLogs ?? true, dropBonus: effectiveDropBonus, lowHpAtkBonus: sectGrowth.lowHpAtkBonus, ultimateDmgReduction },
   );
   const rewardResult = applyBattleRewards(state, result, options);
+
+  // 绝学消耗
+  let postState = rewardResult.state;
+  if (critGuaranteed) {
+    const newFlags = { ...(postState.sectUltimateFlags || {}) };
+    newFlags.crit_guaranteed = Math.max(0, (newFlags.crit_guaranteed || 1) - 1);
+    postState = { ...postState, sectUltimateFlags: newFlags };
+  }
+  const dropBoostRemaining = postState.sectUltimateFlags?.drop_boost_remaining ?? 0;
+  if (dropBoostRemaining > 0) {
+    const newFlags = { ...(postState.sectUltimateFlags || {}) };
+    newFlags.drop_boost_remaining = dropBoostRemaining - 1;
+    postState = { ...postState, sectUltimateFlags: newFlags };
+  }
+
   return {
-    state: rewardResult.state,
+    state: postState,
     result,
     monsterName: monster.name,
     extraLogs: rewardResult.extraLogs,
@@ -302,7 +381,11 @@ export function advanceGameTime(state: GameState, elapsedSeconds: number, resour
   const hasEntered = state.sectId !== null;
 
   const realm = getRealm(state.realmIndex);
-  const expMul = getExpMultiplier(state);
+  let expMul = getExpMultiplier(state);
+  // 绝学：灵宗修炼速度 ×2 判定
+  if (state.sectUltimateActiveUntil > 0 && Date.now() < state.sectUltimateActiveUntil && state.sectId === 'sect_spirit') {
+    expMul *= 2.0;
+  }
 
   const expGain = hasEntered ? realm.expPerSecond * elapsedSeconds * expMul * resourceRate : 0;
   const goldGain = hasEntered ? realm.goldPerSecond * elapsedSeconds * resourceRate : 0;
@@ -484,12 +567,12 @@ export function attemptBreakthrough(state: GameState): { newState: GameState; su
       newState = addLog(newState, `🎉 恭喜踏入${next.name}期！修炼速度大幅提升！`);
     }
   } else {
-    // 失败损失30%修为
-    const lostExp = newState.exp * 0.3;
+    const protectFactor = getBreakthroughFailProtect(newState);
+    const lostExp = newState.exp * 0.3 * (1 - protectFactor);
     newState.exp -= lostExp;
     newState.breakthroughFailCount += 1;
     newState = addLog(newState,
-      `💥 突破失败！走火入魔，损失修为 ${formatNumber(lostExp)}`
+      `💥 突破失败！走火入魔，损失修为 ${formatNumber(lostExp)}${protectFactor > 0 ? '（顿悟天机减免' + (protectFactor * 100).toFixed(0) + '%）' : ''}`
     );
   }
 

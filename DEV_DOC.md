@@ -1,6 +1,6 @@
 # 摸鱼修仙 — 开发者文档
 
-> **最新版本**：v3.6.0（2026-04-04）  
+> **最新版本**：v3.7.0（2026-04-27）  
 > **性质**：React + TypeScript + Vite 的纯前端单机放置修仙游戏。当前正式发版形态为单 HTML 文件；Electron 目录保留，但不属于当前默认发版链路。
 
 ---
@@ -48,7 +48,7 @@ MoYuXiuXian/
 │   │   ├── SectSelectModal.tsx
 │   │   ├── TechniquePanel.tsx
 │   │   └── TutorialOverlay.tsx
-│   ├── data/                      # 11个权威数据文件
+│   ├── data/                      # 14个权威数据文件
 │   │   ├── achievements.ts
 │   │   ├── alchemy.ts
 │   │   ├── dungeon.ts
@@ -59,7 +59,10 @@ MoYuXiuXian/
 │   │   ├── rebirth.ts
 │   │   ├── sect.ts
 │   │   ├── sectPassives.ts
-│   │   └── sectTasks.ts
+│   │   ├── sectShop.ts
+│   │   ├── sectTasks.ts
+│   │   ├── sectTrial.ts
+│   │   └── sectUltimates.ts
 │   ├── engine/                    # 5个引擎文件
 │   │   ├── attributeCalc.ts
 │   │   ├── audioEngine.ts
@@ -70,7 +73,8 @@ MoYuXiuXian/
 │   │   ├── useGameLoop.ts
 │   │   └── useSingleInstance.ts
 │   └── __tests__/
-│       └── core.test.ts
+│       ├── core.test.ts
+│       └── sect-v3.7.0.test.ts
 ├── scripts/
 │   └── injectPatchNote.ts
 ├── electron/

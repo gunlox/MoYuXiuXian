@@ -92,11 +92,13 @@ export function calcBonusAttributes(state: GameState): BonusAttributes {
   const MAX_CRIT_RATE  = 1.0;
   const MAX_CRIT_DMG   = 50.0;
   const MAX_DODGE      = 0.75;
+  const MAX_DEATH_SAVE = 1.0;
   const sectGrowth = getSectGrowthBonuses(state);
 
   let critRate = BASE_CRIT_RATE;
   let critDmg  = BASE_CRIT_DMG;
   let dodge    = BASE_DODGE;
+  let deathSaveChance = 0;
 
   const slots: EquipSlot[] = ['weapon', 'chest', 'pants', 'boots', 'accessory'];
   const rc = state.rebirthCount ?? 0;
@@ -132,6 +134,7 @@ export function calcBonusAttributes(state: GameState): BonusAttributes {
   dodge    += mb.dodgeBonus;
   critRate += sectGrowth.critRateBonus;
   critDmg  += sectGrowth.critDmgBonus;
+  deathSaveChance += sectGrowth.deathSaveChance;
 
   // 门派暴击率加成
   if (state.sectId) {
@@ -154,6 +157,7 @@ export function calcBonusAttributes(state: GameState): BonusAttributes {
     critRate: Math.min(critRate, MAX_CRIT_RATE),
     critDmg:  Math.min(critDmg,  MAX_CRIT_DMG),
     dodge:    Math.min(dodge,    MAX_DODGE),
+    deathSaveChance: Math.min(deathSaveChance, MAX_DEATH_SAVE),
   };
 }
 
@@ -236,7 +240,9 @@ export function getSectGrowthBreakthroughBonus(state: GameState): number {
 
 /** 获取秘境奖励倍率加成 */
 export function getDungeonBonus(state: GameState): number {
-  return state.rebirthPerks ? state.rebirthPerks.dungeonBonus : 0;
+  const sectGrowth = getSectGrowthBonuses(state).dungeonBonus;
+  const rebirthBonus = state.rebirthPerks ? state.rebirthPerks.dungeonBonus : 0;
+  return rebirthBonus + sectGrowth;
 }
 
 /** 获取战斗灵石收益加成 */
@@ -247,4 +253,29 @@ export function getBattleGoldBonus(state: GameState): number {
 /** 获取离线收益倍率加成 */
 export function getOfflineBonus(state: GameState): number {
   return getSectGrowthBonuses(state).offlineBonus;
+}
+
+/** 获取门派成长 Buff 持续上限加成 */
+export function getSectGrowthBuffDurationBonus(state: GameState): number {
+  return getSectGrowthBonuses(state).buffDurationBonus;
+}
+
+/** 获取门派成长突破失败保护加成 */
+export function getBreakthroughFailProtect(state: GameState): number {
+  return getSectGrowthBonuses(state).breakthroughFailProtect;
+}
+
+/** 获取门派成长额外装备掉落概率 */
+export function getSectGrowthExtraDropChance(state: GameState): number {
+  return getSectGrowthBonuses(state).extraDropChance;
+}
+
+/** 获取门派成长双倍炼丹概率 */
+export function getSectGrowthDoubleAlchemyChance(state: GameState): number {
+  return getSectGrowthBonuses(state).doubleAlchemyChance;
+}
+
+/** 获取门派成长双倍功法掉落概率 */
+export function getSectGrowthDoubleTechChance(state: GameState): number {
+  return getSectGrowthBonuses(state).doubleTechChance;
 }

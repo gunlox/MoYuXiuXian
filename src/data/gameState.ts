@@ -109,6 +109,27 @@ export interface GameState {
   shopResetDate: string;
   /** 游戏消息日志 */
   logs: string[];
+
+  // ===== v3.7.0 门派绝学 =====
+  sectUltimateUsedAt: number;
+  sectUltimateActiveUntil: number;
+  sectUltimateFlags: Record<string, number>;
+
+  // ===== v3.7.0 试炼塔 =====
+  sectTrialMaxFloor: number;
+  sectTrialDailyAttempts: number;
+  sectTrialDailyDate: string;
+  sectTrialFloorRewardsClaimed: number[];
+  sectTrialCooldownUntil: number;
+
+  // ===== v3.7.0 贡献商店 =====
+  sectTotalContributionEarned: number;
+  sectShopDailyItems: string[];
+  sectShopDailyDate: string;
+  sectShopPurchaseCounts: Record<string, number>;
+
+  // ===== v3.7.0 轮回传承 =====
+  sectPastLifePassiveId: string | null;
 }
 
 /** 初始状态 */
@@ -160,6 +181,19 @@ export function createInitialState(): GameState {
     shopPurchases: {},
     shopResetDate: new Date().toISOString().slice(0, 10),
     logs: ['你睁开双眼，决定踏上修仙之路……'],
+    sectUltimateUsedAt: 0,
+    sectUltimateActiveUntil: 0,
+    sectUltimateFlags: {},
+    sectTrialMaxFloor: 0,
+    sectTrialDailyAttempts: 3,
+    sectTrialDailyDate: new Date().toISOString().slice(0, 10),
+    sectTrialFloorRewardsClaimed: [],
+    sectTrialCooldownUntil: 0,
+    sectTotalContributionEarned: 0,
+    sectShopDailyItems: [],
+    sectShopDailyDate: new Date().toISOString().slice(0, 10),
+    sectShopPurchaseCounts: {},
+    sectPastLifePassiveId: null,
   };
 }
 
@@ -318,6 +352,20 @@ function migrateState(raw: string): GameState | null {
     if (data.shopResetDate === undefined) data.shopResetDate = new Date().toISOString().slice(0, 10);
     // v1.0.5
     if (data.masteredTechniques === undefined) data.masteredTechniques = [];
+    // v3.7.0 门派优化二期
+    if (data.sectUltimateUsedAt === undefined) data.sectUltimateUsedAt = 0;
+    if (data.sectUltimateActiveUntil === undefined) data.sectUltimateActiveUntil = 0;
+    if (data.sectUltimateFlags === undefined) data.sectUltimateFlags = {};
+    if (data.sectTrialMaxFloor === undefined) data.sectTrialMaxFloor = 0;
+    if (data.sectTrialDailyAttempts === undefined) data.sectTrialDailyAttempts = 3;
+    if (data.sectTrialDailyDate === undefined) data.sectTrialDailyDate = new Date().toISOString().slice(0, 10);
+    if (data.sectTrialFloorRewardsClaimed === undefined) data.sectTrialFloorRewardsClaimed = [];
+    if (data.sectTrialCooldownUntil === undefined) data.sectTrialCooldownUntil = 0;
+    if (data.sectTotalContributionEarned === undefined) data.sectTotalContributionEarned = data.sectContribution ?? 0;
+    if (data.sectShopDailyItems === undefined) data.sectShopDailyItems = [];
+    if (data.sectShopDailyDate === undefined) data.sectShopDailyDate = new Date().toISOString().slice(0, 10);
+    if (data.sectShopPurchaseCounts === undefined) data.sectShopPurchaseCounts = {};
+    if (data.sectPastLifePassiveId === undefined) data.sectPastLifePassiveId = null;
     // v1.0.6
     if (data.rebirthPerks) {
       if (data.rebirthPerks.staminaBonus === undefined) data.rebirthPerks.staminaBonus = 0;

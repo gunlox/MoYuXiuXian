@@ -13,6 +13,8 @@ export interface BonusAttributes {
   critDmg: number;
   /** 闪避率 0~0.75 */
   dodge: number;
+  /** 免死概率 0~1，基础0 */
+  deathSaveChance: number;
 }
 
 /** 境界定义 */

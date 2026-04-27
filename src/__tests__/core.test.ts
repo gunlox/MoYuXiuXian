@@ -538,14 +538,14 @@ describe('战斗引擎', () => {
 
   it('强玩家必胜弱怪', () => {
     const playerAttrs = { attack: 1000, defense: 500, hp: 5000 };
-    const bonusAttrs = { critRate: 0.5, critDmg: 1.0, dodge: 0.2 };
+    const bonusAttrs = { critRate: 0.5, critDmg: 1.0, dodge: 0.2, deathSaveChance: 0 };
     const result = executeBattle(playerAttrs, bonusAttrs, weakMonster, { captureLogs: false });
     expect(result.victory).toBe(true);
   });
 
   it('每场新战斗由玩家先手，秒杀时怪物不会抢先出手', () => {
     const playerAttrs = { attack: 1000, defense: 100, hp: 1000 };
-    const bonusAttrs = { critRate: 0, critDmg: 0, dodge: 0 };
+    const bonusAttrs = { critRate: 0, critDmg: 0, dodge: 0, deathSaveChance: 0 };
     const monster = {
       id: 'test_first_turn',
       name: '先手木桩',
@@ -566,21 +566,21 @@ describe('战斗引擎', () => {
 
   it('胜利后获得经验值', () => {
     const playerAttrs = { attack: 1000, defense: 500, hp: 5000 };
-    const bonusAttrs = { critRate: 0, critDmg: 0, dodge: 0 };
+    const bonusAttrs = { critRate: 0, critDmg: 0, dodge: 0, deathSaveChance: 0 };
     const result = executeBattle(playerAttrs, bonusAttrs, weakMonster, { captureLogs: false });
     expect(result.expGained).toBeGreaterThan(0);
   });
 
   it('胜利后掉落100%概率物品一定掉落', () => {
     const playerAttrs = { attack: 1000, defense: 500, hp: 5000 };
-    const bonusAttrs = { critRate: 0, critDmg: 0, dodge: 0 };
+    const bonusAttrs = { critRate: 0, critDmg: 0, dodge: 0, deathSaveChance: 0 };
     const result = executeBattle(playerAttrs, bonusAttrs, weakMonster, { captureLogs: false });
     expect(result.drops.length).toBeGreaterThan(0);
   });
 
   it('失败时expGained=0', () => {
     const playerAttrs = { attack: 1, defense: 0, hp: 1 };
-    const bonusAttrs = { critRate: 0, critDmg: 0, dodge: 0 };
+    const bonusAttrs = { critRate: 0, critDmg: 0, dodge: 0, deathSaveChance: 0 };
     const monster = { ...weakMonster, attackMin: 100, attackMax: 100, hpMin: 1000, hpMax: 1000 };
     const result = executeBattle(playerAttrs, bonusAttrs, monster, { captureLogs: false });
     expect(result.victory).toBe(false);
@@ -589,7 +589,7 @@ describe('战斗引擎', () => {
 
   it('最多50回合结束', () => {
     const playerAttrs = { attack: 100, defense: 0, hp: 99999999 };
-    const bonusAttrs = { critRate: 0, critDmg: 0, dodge: 0 };
+    const bonusAttrs = { critRate: 0, critDmg: 0, dodge: 0, deathSaveChance: 0 };
     const monster = { ...weakMonster, defense: 999999999, hpMin: 999999999, hpMax: 999999999 };
     const result = executeBattle(playerAttrs, bonusAttrs, monster, { captureLogs: false });
     expect(result.rounds).toBeLessThanOrEqual(50);
@@ -597,7 +597,7 @@ describe('战斗引擎', () => {
 
   it('玩家血量不会低于0', () => {
     const playerAttrs = { attack: 1, defense: 0, hp: 100 };
-    const bonusAttrs = { critRate: 0, critDmg: 0, dodge: 0 };
+    const bonusAttrs = { critRate: 0, critDmg: 0, dodge: 0, deathSaveChance: 0 };
     const monster = { ...weakMonster, attackMin: 1000, attackMax: 1000, hpMin: 1000, hpMax: 1000 };
     const result = executeBattle(playerAttrs, bonusAttrs, monster, { captureLogs: false });
     expect(result.playerHpRemaining).toBeGreaterThanOrEqual(0);
@@ -605,7 +605,7 @@ describe('战斗引擎', () => {
 
   it('胜利后玩家血量 <= 最大血量', () => {
     const playerAttrs = { attack: 1000, defense: 500, hp: 5000 };
-    const bonusAttrs = { critRate: 0, critDmg: 0, dodge: 0 };
+    const bonusAttrs = { critRate: 0, critDmg: 0, dodge: 0, deathSaveChance: 0 };
     const result = executeBattle(playerAttrs, bonusAttrs, weakMonster, { captureLogs: false });
     expect(result.playerHpRemaining).toBeLessThanOrEqual(result.playerHpMax);
   });
@@ -613,7 +613,7 @@ describe('战斗引擎', () => {
   it('玩家伤害至少为攻击力的10%', () => {
     const monster = { ...weakMonster, defense: 999_999_999, hpMin: 100, hpMax: 100 };
     const player = { attack: 100, defense: 0, hp: 99_999_999 };
-    const result = executeBattle(player, { critRate: 0, critDmg: 0, dodge: 0 }, monster, { captureLogs: false });
+    const result = executeBattle(player, { critRate: 0, critDmg: 0, dodge: 0, deathSaveChance: 0 }, monster, { captureLogs: false });
     expect(result.rounds).toBeLessThanOrEqual(50);
   });
 });
@@ -1122,12 +1122,17 @@ describe('门派深度化 v3.6.0', () => {
   });
 
   it('门派等级阈值计算正确', () => {
-    expect(SECT_LEVEL_REQUIREMENTS).toEqual([0, 100, 250, 500, 900]);
+    expect(SECT_LEVEL_REQUIREMENTS).toEqual([0, 100, 250, 500, 900, 1500, 2500, 4000, 6000, 10000]);
     expect(getSectLevelByContribution(0)).toBe(1);
     expect(getSectLevelByContribution(100)).toBe(2);
     expect(getSectLevelByContribution(250)).toBe(3);
     expect(getSectLevelByContribution(500)).toBe(4);
     expect(getSectLevelByContribution(900)).toBe(5);
+    expect(getSectLevelByContribution(1500)).toBe(6);
+    expect(getSectLevelByContribution(2500)).toBe(7);
+    expect(getSectLevelByContribution(4000)).toBe(8);
+    expect(getSectLevelByContribution(6000)).toBe(9);
+    expect(getSectLevelByContribution(10000)).toBe(10);
   });
 
   it('门派等级提升后自动解锁里程碑被动', () => {
