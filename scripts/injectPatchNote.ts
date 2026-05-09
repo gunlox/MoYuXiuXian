@@ -5,6 +5,11 @@
 import type { Plugin } from 'vite';
 
 const PATCH_NOTES = [
+  { title: '🔧 v3.7.1 问题修复', items: [
+    '修复门派被动突破率面板不显示的问题——完整展示门派被动、轮回加成的突破率来源',
+    '修复转生后成长任务无法重新领取的问题——转生时正确清空任务领取记录',
+    '修复转生后突破次数归零导致"突破大师"成就(50次)无法完成的问题——突破次数跨轮回累计',
+  ]},
   { title: '🏯 v3.7.0 门派优化二期', items: [
     '门派等级上限扩展至10级，新增Lv.3/Lv.6~10共25个里程碑被动',
     '六种全新机制型被动：剑宗额外掉落、丹宗双倍炼丹、体修宗浴血奋战/不灭金身、灵宗突破保护、福地宗双倍功法',
@@ -53,7 +58,7 @@ function buildPatchHTML(versionLabel: string, storageKey: string): string {
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
       <div>
         <div style="font-size:20px;font-weight:bold;color:#f5c842;font-family:KaiTi,STKaiti,serif;">摸鱼修仙 ${versionLabel} 更新日志</div>
-        <div style="font-size:12px;color:#8a8a9a;margin-top:4px;">2026-04-27</div>
+        <div style="font-size:12px;color:#8a8a9a;margin-top:4px;">2026-05-01</div>
       </div>
       <div style="
         background:rgba(245,200,66,0.15);border:1px solid rgba(245,200,66,0.3);

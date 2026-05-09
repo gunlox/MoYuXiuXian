@@ -44,8 +44,9 @@ export default function RebirthPanel({ gameState, onStateChange }: Props) {
         sectDailyTasks: [],
         sectDailyTaskDate: new Date().toISOString().slice(0, 10),
         sectTaskProgress: {},
-        sectClaimedTasks: prev.sectClaimedTasks.filter(id => !id!.startsWith('daily:')),
+        sectClaimedTasks: [],
         unlockedAchievements: prev.unlockedAchievements,
+        breakthroughCount: prev.breakthroughCount,
         stats: {
           ...prev.stats,
           maxRealmReached: Math.max(prev.stats?.maxRealmReached || 0, prev.realmIndex),

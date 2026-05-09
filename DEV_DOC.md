@@ -1,6 +1,6 @@
 # 摸鱼修仙 — 开发者文档
 
-> **最新版本**：v3.7.0（2026-04-27）  
+> **最新版本**：v3.7.1（2026-05-01）  
 > **性质**：React + TypeScript + Vite 的纯前端单机放置修仙游戏。当前正式发版形态为单 HTML 文件；Electron 目录保留，但不属于当前默认发版链路。
 
 ---
@@ -1143,6 +1143,21 @@ git push origin v3.6.0
 ---
 
 ## 20. 版本更新日志
+
+### v3.7.1（2026-05-01）
+
+**BUG修复**
+
+- **门派被动突破率面板显示修复**：`getBreakthroughInfo()` 现包含门派初始加成、门派成长被动和轮回永久加成的突破率，`BreakthroughPanel` 分项展示🏯门派/🔄轮回/💊丹药加成来源
+- **转生后成长任务无法重领修复**：转生时 `sectClaimedTasks` 完全清空（旧逻辑只清每日任务，成长任务领取记录被保留导致无法重领）
+- **转生后突破大师成就无法完成修复**：`breakthroughCount` 现跨轮回累计保留，避免30层境界上限导致50次突破成就永远无法达成
+
+**修改文件**
+- `src/engine/gameEngine.ts` — `getBreakthroughInfo()` 新增 `sectBonus`/`rebirthBonus`/`pillBonus` 返回值
+- `src/components/BreakthroughPanel.tsx` — 成功率展示改为三来源分项
+- `src/components/App.tsx` — 移除旧的 `breakthroughBonus` prop
+- `src/components/RebirthPanel.tsx` — 转生清空 `sectClaimedTasks`、保留 `breakthroughCount`
+- `scripts/injectPatchNote.ts` — 更新补丁说明至 v3.7.1
 
 ### v3.6.0（2026-04-04）
 

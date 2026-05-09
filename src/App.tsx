@@ -317,7 +317,6 @@ function GameApp({ initialState, slotIndex, isNewGame }: GameAppProps) {
                 info={breakthroughInfo}
                 currentExp={gameState.exp}
                 currentGold={gameState.gold}
-                breakthroughBonus={gameState.breakthroughBonus || 0}
                 onBreakthrough={doBreakthrough}
               />
             </div>

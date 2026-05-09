@@ -480,12 +480,15 @@ export function getBreakthroughInfo(state: GameState): {
   successRate: number;
   isMajor: boolean;
   nextName: string;
+  sectBonus: number;
+  rebirthBonus: number;
+  pillBonus: number;
 } {
   const realm = getRealm(state.realmIndex);
   const next = getNextRealm(state.realmIndex);
 
   if (!next) {
-    return { canDo: false, needExp: 0, needGold: 0, successRate: 0, isMajor: false, nextName: '已达巅峰' };
+    return { canDo: false, needExp: 0, needGold: 0, successRate: 0, isMajor: false, nextName: '已达巅峰', sectBonus: 0, rebirthBonus: 0, pillBonus: 0 };
   }
 
   const isMajor = isMajorBreakthrough(state.realmIndex);
@@ -493,13 +496,22 @@ export function getBreakthroughInfo(state: GameState): {
   const hasEnoughExp = state.exp >= realm.requiredExp;
   const hasEnoughGold = state.gold >= needGold;
 
+  const sectInitBonus = state.sectId ? (getSect(state.sectId)?.bonus.breakthroughBonus ?? 0) : 0;
+  const sectGrowthBonus = getSectGrowthBreakthroughBonus(state);
+  const perkBonus = getBreakthroughPerkBonus(state);
+  const pillBonusFromState = state.breakthroughBonus || 0;
+  const totalBonus = sectInitBonus + sectGrowthBonus + perkBonus + pillBonusFromState;
+
   return {
     canDo: hasEnoughExp && hasEnoughGold,
     needExp: realm.requiredExp,
     needGold,
-    successRate: realm.breakthroughRate,
+    successRate: Math.min(1, realm.breakthroughRate + totalBonus),
     isMajor,
     nextName: next.subLevelName,
+    sectBonus: sectInitBonus + sectGrowthBonus,
+    rebirthBonus: perkBonus,
+    pillBonus: pillBonusFromState,
   };
 }
 

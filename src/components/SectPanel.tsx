@@ -32,10 +32,11 @@ export default function SectPanel({ gameState, onStateChange }: Props) {
     .map(taskId => getSectTaskById(taskId))
     .filter((task): task is NonNullable<typeof task> => !!task);
   const growthTasks = getSectGrowthTasks(sectId);
+  const totalEarned = gameState.sectTotalContributionEarned ?? gameState.sectContribution ?? 0;
   const currentRequirement = SECT_LEVEL_REQUIREMENTS[Math.max(0, gameState.sectLevel - 1)] ?? 0;
   const nextRequirement = SECT_LEVEL_REQUIREMENTS[gameState.sectLevel] ?? currentRequirement;
   const progressPercent = nextRequirement > currentRequirement
-    ? Math.min(100, Math.floor(((gameState.sectContribution - currentRequirement) / (nextRequirement - currentRequirement)) * 100))
+    ? Math.min(100, Math.floor(((totalEarned - currentRequirement) / (nextRequirement - currentRequirement)) * 100))
     : 100;
 
   const handleClaim = (taskId: string) => {
@@ -63,8 +64,8 @@ export default function SectPanel({ gameState, onStateChange }: Props) {
           <div className="text-sm text-xian-gold/70">等级 {gameState.sectLevel}/{SECT_LEVEL_REQUIREMENTS.length}</div>
         </div>
         <div className="flex items-center justify-between text-sm mb-2">
-          <span className="text-xian-gold/70">当前贡献</span>
-          <span className="text-xian-gold font-bold">{gameState.sectContribution}</span>
+          <span className="text-xian-gold/70">终身贡献</span>
+          <span className="text-xian-gold font-bold">{totalEarned}</span>
         </div>
         <div className="bg-black/30 rounded-full h-3 overflow-hidden mb-2">
           <div
@@ -74,7 +75,7 @@ export default function SectPanel({ gameState, onStateChange }: Props) {
         </div>
         <div className="text-xs text-xian-gold/60 text-right">
           {nextRequirement > currentRequirement
-            ? `距离下一级还需 ${Math.max(0, nextRequirement - gameState.sectContribution)} 贡献`
+            ? `距离下一级还需 ${Math.max(0, nextRequirement - totalEarned)} 贡献`
             : '已达到当前版本等级上限'}
         </div>
       </div>

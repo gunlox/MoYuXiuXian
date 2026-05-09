@@ -7,17 +7,19 @@ interface BreakthroughInfo {
   successRate: number;
   isMajor: boolean;
   nextName: string;
+  sectBonus: number;
+  rebirthBonus: number;
+  pillBonus: number;
 }
 
 interface Props {
   info: BreakthroughInfo;
   currentExp: number;
   currentGold: number;
-  breakthroughBonus: number;
   onBreakthrough: () => void;
 }
 
-export default function BreakthroughPanel({ info, currentExp, currentGold, breakthroughBonus, onBreakthrough }: Props) {
+export default function BreakthroughPanel({ info, currentExp, currentGold, onBreakthrough }: Props) {
   const expReady = currentExp >= info.needExp;
   const goldReady = !info.isMajor || currentGold >= info.needGold;
 
@@ -77,9 +79,19 @@ export default function BreakthroughPanel({ info, currentExp, currentGold, break
             <span className={info.successRate >= 0.8 ? 'text-green-400' : info.successRate >= 0.5 ? 'text-yellow-400' : 'text-red-400'}>
               {Math.floor(info.successRate * 100)}%
             </span>
-            {breakthroughBonus > 0 && (
+            {info.sectBonus > 0 && (
               <span className="text-purple-400 text-sm">
-                +{Math.floor(breakthroughBonus * 100)}%💊
+                +{Math.floor(info.sectBonus * 100)}%🏯
+              </span>
+            )}
+            {info.rebirthBonus > 0 && (
+              <span className="text-cyan-400 text-sm">
+                +{Math.floor(info.rebirthBonus * 100)}%🔄
+              </span>
+            )}
+            {info.pillBonus > 0 && (
+              <span className="text-pink-400 text-sm">
+                +{Math.floor(info.pillBonus * 100)}%💊
               </span>
             )}
           </div>
